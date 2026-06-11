@@ -81,14 +81,19 @@ def forzar_comprobacion(message):
     bot.reply_to(message, "🔍 Comprobando sorteo en la web oficial de la ONCE...")
     comprobar_premio()
 
-# --- LÓGICA DEL SORTEO Y ALERTAS (CORREGIDA) ---
+# --- LÓGICA DEL SORTEO Y ALERTAS (CON FILTRO DE IMPUREZAS HTML) ---
 def obtener_numero_once():
     url = "https://www.juegosonce.es/resultados-cupon-diario"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
         html = requests.get(url, headers=headers).text
-        # Filtro mejorado: Buscamos "Cupón Diario", avanzamos hasta "Número" y pillamos los 5 dígitos
-        match = re.search(r'Cup[oóOÓ]n Diario.*?N[úu]mero.*?(\d{5})', html, re.IGNORECASE | re.DOTALL)
+        
+        # 1. Limpiamos TODAS las etiquetas HTML (<div...>, <span...>, scripts, etc)
+        # Esto evita que el bot lea identificadores internos como el id="09006"
+        texto_limpio = re.sub(r'<[^>]+>', ' ', html)
+        
+        # 2. Ahora que solo hay texto puro, buscamos la frase de éxito
+        match = re.search(r'N[úu]mero premiado.*?(\d{5})', texto_limpio, re.IGNORECASE)
         return match.group(1) if match else None
     except:
         return None
