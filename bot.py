@@ -88,12 +88,12 @@ def obtener_numero_once():
     try:
         html = requests.get(url, headers=headers).text
         
-        # 1. Limpiamos TODAS las etiquetas HTML (<div...>, <span...>, scripts, etc)
-        # Esto evita que el bot lea identificadores internos como el id="09006"
+        # 1. Limpiamos TODAS las etiquetas HTML para dejar solo el texto
         texto_limpio = re.sub(r'<[^>]+>', ' ', html)
         
-        # 2. Ahora que solo hay texto puro, buscamos la frase de éxito
-        match = re.search(r'N[úu]mero premiado.*?(\d{5})', texto_limpio, re.IGNORECASE)
+        # 2. Buscamos "Cupón Diario", avanzamos saltando la fecha hasta "Número" y atrapamos los 5 dígitos
+        match = re.search(r'Cup[oó]n Diario.*?N[úu]mero.*?(\d{5})', texto_limpio, re.IGNORECASE | re.DOTALL)
+        
         return match.group(1) if match else None
     except:
         return None
