@@ -87,8 +87,8 @@ def obtener_numero_once():
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
         html = requests.get(url, headers=headers).text
-        # Filtro estricto: Busca la sección "Cupón Diario", lee hasta los primeros 5 dígitos y exige que vaya seguido de la palabra "Serie"
-        match = re.search(r'Cup[oóOÓ]n Diario.{1,500}?(\d{5}).{1,100}?Serie', html, re.IGNORECASE | re.DOTALL)
+        # Filtro mejorado: Buscamos "Cupón Diario", avanzamos hasta "Número" y pillamos los 5 dígitos
+        match = re.search(r'Cup[oóOÓ]n Diario.*?N[úu]mero.*?(\d{5})', html, re.IGNORECASE | re.DOTALL)
         return match.group(1) if match else None
     except:
         return None
