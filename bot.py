@@ -4,6 +4,7 @@ import time
 import threading
 import requests
 import re
+import datetime
 from flask import Flask
 import os
 
@@ -38,7 +39,8 @@ def bienvenida(message):
     bot.reply_to(message, "¡Hola! Gestiona tu ticket del parking con estos comandos:\n\n"
                           "🔹 `/ticket 482` - Registra tu número para hoy.\n"
                           "🔹 `/ver` - Comprueba el número que tienes guardado hoy.\n"
-                          "🔹 `/stats` - Mira tu historial de juego.")
+                          "🔹 `/stats` - Mira tu historial de juego.\n"
+                          "🔹 `/reset` - Reinicia tus estadísticas a cero.")
 
 @bot.message_handler(commands=['ticket'])
 def registrar_ticket(message):
@@ -55,7 +57,7 @@ def registrar_ticket(message):
         else:
             bot.reply_to(message, "⚠️ Formato incorrecto. Ejemplo: /ticket 482")
     except:
-        bot.reply_to(message, "⚠️ Falta el número.")
+        bot.reply_to(message, "⚠️ Falta el número. Ejemplo: /ticket 482")
 
 @bot.message_handler(commands=['ver'])
 def ver_ticket(message):
@@ -76,24 +78,40 @@ def ver_estadisticas(message):
                           f"🔹 Sorteos jugados: {user_stats['jugados']}\n"
                           f"🏆 Premios ganados: {user_stats['ganados']}", parse_mode="Markdown")
 
+@bot.message_handler(commands=['reset'])
+def resetear_estadisticas(message):
+    datos = cargar_datos()
+    chat_id = str(message.chat.id)
+    if chat_id in datos.get("stats", {}):
+        datos["stats"][chat_id] = {"jugados": 0, "ganados": 0}
+        guardar_datos(datos)
+        bot.reply_to(message, "🧹 Tus estadísticas han sido reseteadas a cero. ¡Mucha suerte a partir de ahora!")
+    else:
+        bot.reply_to(message, "Aún no tienes estadísticas guardadas.")
+
 @bot.message_handler(commands=['test'])
 def forzar_comprobacion(message):
     bot.reply_to(message, "🔍 Comprobando sorteo en la web oficial de la ONCE...")
     comprobar_premio()
 
-# --- LÓGICA DEL SORTEO Y ALERTAS (CON FILTRO DE IMPUREZAS HTML) ---
+# --- LÓGICA DEL SORTEO Y ALERTAS ---
 def obtener_numero_once():
-    url = "https://www.juegosonce.es/resultados-cupon-diario"
+    # Detecta el día de la semana para elegir el sorteo correcto
+    dia_semana = datetime.datetime.now().weekday()
+    if dia_semana <= 3:
+        url = "https://www.juegosonce.es/resultados-cupon-diario"
+    elif dia_semana == 4:
+        url = "https://www.juegosonce.es/resultados-cuponazo"
+    else:
+        url = "https://www.juegosonce.es/resultados-sueldazo-fin-de-semana"
+
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     try:
         html = requests.get(url, headers=headers).text
-        
-        # 1. Limpiamos TODAS las etiquetas HTML para dejar solo el texto
+        # Filtro purificador de HTML
         texto_limpio = re.sub(r'<[^>]+>', ' ', html)
-        
-        # 2. Buscamos "Cupón Diario", avanzamos saltando la fecha hasta "Número" y atrapamos los 5 dígitos
-        match = re.search(r'Cup[oó]n Diario.*?N[úu]mero.*?(\d{5})', texto_limpio, re.IGNORECASE | re.DOTALL)
-        
+        # Búsqueda universal para cualquier tipo de cupón
+        match = re.search(r'(?:Cup[oó]n Diario|Cuponazo|Sueldazo).*?N[úu]mero.*?(\d{5})', texto_limpio, re.IGNORECASE | re.DOTALL)
         return match.group(1) if match else None
     except:
         return None
@@ -121,6 +139,7 @@ def comprobar_premio():
         else:
             bot.send_message(chat_id, f"Hoy no hubo suerte. ONCE: {numero_ganador}, tu ticket: {ticket}.")
             
+    # Vaciamos tickets pero mantenemos stats
     datos["tickets"] = {}
     datos["stats"] = stats
     guardar_datos(datos)
@@ -132,7 +151,7 @@ def enviar_recordatorio():
     for chat_id in stats.keys():
         if chat_id not in tickets:
             try:
-                bot.send_message(chat_id, "🔔 *¡Recordatorio diario!* No he detectado ningún ticket a tu nombre para hoy. Acuérdate de registrarlo con `/ticket XXX`.", parse_mode="Markdown")
+                bot.send_message(chat_id, "🔔 *¡Recordatorio diario!* No he detectado ningún ticket a tu nombre para hoy. Acuérdate de registrarlo con `/ticket XXX` antes del sorteo.", parse_mode="Markdown")
             except:
                 pass
 
@@ -145,11 +164,12 @@ def tareas_programadas():
         time.sleep(1)
 
 def iniciar_bot():
-    bot.polling(none_stop=True)
+    # La solución definitiva a los microcortes de conexión
+    bot.infinity_polling()
 
 @app.route('/')
 def home():
-    return "¡Bot funcionando!"
+    return "¡Bot funcionando 24/7!"
 
 if __name__ == '__main__':
     threading.Thread(target=iniciar_bot, daemon=True).start()
